@@ -1,0 +1,17 @@
+{
+  "name": "node-web-scrape",
+  "version": "0.0.1",
+  "description": "Scrape le web.",
+  "main": "server.js",
+  "author": "Mike",
+  "dependencies": {
+    "cheerio": "latest",
+    "detect-csv": "^1.1.0",
+    "express": "latest",
+    "fast-csv": "^2.3.1",
+    "mongodb": "^2.2.24",
+    "pretty-data": "^0.40.0",
+    "request": "latest"
+  },
+  "devDependencies": {}
+}

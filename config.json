@@ -1,0 +1,7 @@
+{
+    "auth_file"      : "auth",
+    "auth_key"       : "6FRF0Z1U3B",
+    "auth_last_file" : "logs/auth_last.log",
+    "auth_validity"  : 3600,
+    "cookie_file"    : "logs/cookie.log"
+}
