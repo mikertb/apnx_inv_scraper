@@ -5,15 +5,13 @@ const app = express();
 app.get('/info/inventory',function(req,res){
     MongoClient.connect('mongodb://localhost/apnx', search);
     function search(error,db){
-        let collection = db.collection('inventory');
+        let collection  = db.collection('inventory');
+        let geo_country = !req.query.country? 'any' : (req.query.country == 'all'? 'any' : req.query.country);
         let device_type = !req.query.device_type? "any" : req.query.device_type;
         let supply_type = !req.query.supply_type? "any" : req.query.supply_type;
         let keywords = !req.query.keyword? "" : req.query.keyword;
-        let find = {
-            "filter": device_type+'-'+supply_type,
-            "geo_country": !req.query.country? '--' : (req.query.country == 'all'? '--' : req.query.country),
-            "seller_member_name": {$regex: keywords, $options: "i"}
-        }
+        let find = {"filter": `${geo_country}.${device_type}.${supply_type}`};
+        if(keywords.length > 0) find.seller_member_name = {$regex: keywords, $options: "i"};
         let sort = !req.query.sort_by? "filtered_imps" : req.query.sort_by;
         let order = !req.query.order_by? -1 : (req.query.order_by == "asc"? 1 : -1);
         let limit = !req.query.limit? 25 : Number(req.query.limit);

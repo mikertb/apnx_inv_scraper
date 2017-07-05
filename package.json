@@ -5,10 +5,10 @@
   "main": "server.js",
   "author": "Mike",
   "dependencies": {
-    "cheerio": "latest",
     "detect-csv": "^1.1.0",
     "express": "latest",
     "fast-csv": "^2.3.1",
+    "fs-extra": "^3.0.1",
     "mongodb": "^2.2.24",
     "pretty-data": "^0.40.0",
     "request": "latest"
