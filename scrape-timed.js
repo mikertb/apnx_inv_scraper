@@ -12,8 +12,8 @@ const countries = JSON.parse(fs.readFileSync('json/countries_jvector_map.json'))
 // Reference
 const total_csv = countries.length * 16;
 login_attempts = 0;
-const cookie_file = path.join(__dirname,'logs',config.cookie_file);
-const auth_last_file = path.join(__dirname,'logs',config.auth_last_file);
+const cookie_file = path.join(__dirname,config.cookie_file);
+const auth_last_file = path.join(__dirname,config.auth_last_file);
 
 /**
  * Makes a single log entry in logs folder.
