@@ -1,19 +1,26 @@
 const checkcsv  = require('detect-csv');
 const crypto    = require('crypto');
+const exec      = require('child_process').exec;
+const fs        = require('fs-extra');
 const path      = require('path');
-const fs        = require('fs');
 const prettyd   = require("pretty-data").pd;
 const request   = require('request');
 
 /* File Dependencies */
-const config    = JSON.parse(fs.readFileSync('config.json'));
-const countries = JSON.parse(fs.readFileSync('json/countries_jvector_map.json'));
+const config     = JSON.parse(fs.readFileSync('config.json'));
+const input_list = process.argv[2] || 'countries_jvector_map.json';
+const countries  = JSON.parse(fs.readFileSync(path.join('json',input_list)));
 
 // Reference
+const date_today = (new Date()).toISOString().replace(/T\d{2}.+/,"");
 const total_csv = countries.length * 16;
-login_attempts = 0;
 const cookie_file = path.join(__dirname,config.cookie_file);
 const auth_last_file = path.join(__dirname,config.auth_last_file);
+
+var login_attempts = 0;
+var csv_requested = 0;
+var csv_retrieved = 0;
+var csv_completed = 0;
 
 /**
  * Makes a single log entry in logs folder.
@@ -24,9 +31,11 @@ const auth_last_file = path.join(__dirname,config.auth_last_file);
  */
 function logEvent(type,message){
     let date = (new Date()).toISOString().replace(/T/, ' ').replace(/\..+/, '')+' UTC';
+    let folder = path.join(__dirname,'logs');
+    let file = path.join(__dirname,'logs',`${type}.log`);
     let full_text = date+' - '+message+"\n";
-    if(!fs.existsSync('logs')) fs.mkdirSync('logs');
-    fs.writeFileSync('logs/'+type+'.log',full_text,{flag:'a'});
+    if(!fs.existsSync(folder)) fs.mkdirSync('logs');
+    fs.writeFileSync(file,full_text,{flag:'a'});
 }
 
 /**
@@ -43,25 +52,6 @@ function isLogged(){
     if(time_now > (last_log+config.auth_validity)){
         return false;
     } else { return true; }
-}
-
-/**
- * Updates csv progress log by adding +1 to the log file. Progress data inside
- * its log file is writter in a format 'completed/total'.
- * 
- * @param  {Boolean} reset If set to true log progress will be reset to 0.
- * @return {Null}
- */
-function updateProgress(reset){
-    if(!fs.existsSync('logs')) fs.mkdirSync('logs');
-    let log_file = 'logs/csv_completed.log';
-    if(reset){
-        fs.writeFileSync(log_file,'0/'+total_csv);
-    } else {
-        let last_data = fs.readFileSync(log_file,{encoding:'utf8'}).split('/');
-        let update_data = (Number(last_data[0])+1)+'/'+total_csv;
-        fs.writeFileSync(log_file,update_data);
-    }
 }
 
 /**
@@ -102,10 +92,10 @@ function login(callback){
         }
         else{logEvent('login_errors',error.message);}
         if(success) {
-            console.log("Login success.");
+            logEvent('login_access','Ok: Login successful.');
             if(callback) callback();
         } else {
-            console.log("Login failed.");
+            logEvent('login_access','Error: Login failed.');
         }
     });
 }
@@ -129,7 +119,7 @@ function keepAlive(callback) {
         }
             
     } else {
-        console.log('OK: Session is still active.');
+        // console.log('OK: Session is still active.');
         callback();
     }
 }
@@ -142,10 +132,10 @@ function keepAlive(callback) {
  * @param    {Number} supply           - Appnexus' numeric value for supply type.
  * @param    {String} filename         - Name of CSV file to save as combination of supply
  *                                       and device names, ie 'all.web'.
- * @requires {Function} updateProgress - Called for each successful CSV retrieval.
  * @return   {Null}
  */
 function getCSV(country,device,supply,filename){
+    csv_requested++;
     let filters = {"search": "", "report_type": "seller" };
         if(country.name != "any") filters.country = country.name;
         if(supply != "any") filters.supply_type = [supply];
@@ -156,19 +146,28 @@ function getCSV(country,device,supply,filename){
         headers: { Cookie: fs.readFileSync(cookie_file).toString() }
     }
     request(data,function(error,response,body){
+        csv_retrieved++;
         if(!error){
-            let dir = 'csv/'+country.code;
+            let dir = path.join('csv',country.code);
+            let csv = path.join('csv',country.code,`${filename}.csv`);
             if (!fs.existsSync(dir)) fs.mkdirSync(dir);
-            fs.writeFileSync(dir+'/'+filename+'.csv',body,{encoding:'utf8'});
+            
             if(!checkcsv(body)) {
-                logEvent('csv_errors','Can\'t read csv for "'+country.name+'"');
+                logEvent('csv_errors','Can\'t read csv for "'+country.code+'"');
             } else {
-                updateProgress();
-                fs.writeFileSync('logs/login_body.log',body);
+                csv_completed++;
+                fs.writeFileSync(csv,body,{encoding:'utf8'});
+                //fs.writeFileSync('logs/login_body.log',body);
+            }
+            if(csv_retrieved == total_csv){
+                let done_message = `CSV scraping done. Saved items: ${csv_completed}/${total_csv}.`
+                logEvent('app_run',done_message);
+                console.log(done_message);
+                // Save CSV to database.
+                setTimeout(()=>{exec('node update_db',(error,stdout,stderr)=>{console.log(stdout);})},15000);
             }
         }else{ logEvent('csv_errors','ERROR: "'+error.message+'" for geo '+country.name+'('+country.code+')'); }
     });
-    //console.log(country.code);
 }
 
 /**
@@ -184,6 +183,7 @@ function getCSV(country,device,supply,filename){
  */
 function save(country,country_delay){
     setTimeout(()=>{
+        console.log(`Scraping: ${country.code}`);
         keepAlive(function(){
             let delay = 0;
             let device_ids = ['any','0','2','3'];
@@ -214,11 +214,14 @@ function save(country,country_delay){
 }
 
 
-// Run the program.
+/* Start */
 country_delay = 0;
 keepAlive(()=>{
-    logEvent('app_run','Scraping started.');
-    updateProgress(true);
+    // Empty CSV folder for old files.
+    fs.emptyDirSync(path.join(__dirname,'csv'));
+    let scrape_last_file = path.join(__dirname,'logs','scrape_last.log');
+    fs.writeFileSync(scrape_last_file,date_today);
+    logEvent('app_run',`CSV scraping started. Total items: ${total_csv}.`);
     for(country of countries){
         save(country,country_delay);
         country_delay += 18000;
