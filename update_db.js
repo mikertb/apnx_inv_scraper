@@ -104,7 +104,19 @@ function getCountryDocs(list,index,callback){
                         readCSV(list,next,callback);
                     }
                 })
-                .on('error',(e)=>console.log(e));
+                .on('error',(e)=>{
+                    let csv_current = JSON.stringify();
+                    let error_string = `Invalid CSV line for ${geo_code} - ${cname}`;
+                    logEvent('csv_errors',error_string);
+                    console.log(error_string);
+                    count++;
+                    if(count == list.length){
+                        callback();
+                    }else{
+                        let next = index+1;
+                        readCSV(list,next,callback);
+                    }
+                });
             }else{
                 callback();
             }
